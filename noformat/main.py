@@ -7,14 +7,13 @@ from os import path
 not_imported = []
 try:
     import numpy
-
     npy_properties = [numpy.ndarray, numpy.save, numpy.load]
 except ImportError:
     npy_properties = []
     not_imported.append('npy')
+
 try:
     import pandas
-
     # noinspection PyUnresolvedReferences
     pd_properties = [pandas.core.generic.NDFrame, pandas.to_msgpack, pandas.read_msgpack]
 except ImportError:

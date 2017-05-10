@@ -137,11 +137,14 @@ class Attributes(MutableMapping):
             json.dump(self.dict, open(self.file_name, 'w'))
 
 
-def empty_dir(top):
+def empty_dir(top: str) -> None:
+    """recursively delete all files inside folder 'top'"""
     if top == '/' or top == "\\":
         return
     for root, dirs, files in os.walk(top, topdown=False):
         for name in files:
             os.remove(os.path.join(root, name))
         for name in dirs:
-            os.rmdir(os.path.join(root, name))
+            folder_path = os.path.join(root, name)
+            empty_dir(folder_path)
+            os.rmdir(folder_path)

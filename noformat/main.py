@@ -4,19 +4,16 @@ import os
 from collections.abc import MutableMapping
 from os import path
 
-not_imported = []
-try:
-    import numpy
-    npy_properties = [numpy.ndarray, numpy.save, numpy.load]
-except ImportError:
-    npy_properties = []
-    not_imported.append('npy')
+import numpy
+npy_properties = [numpy.ndarray, numpy.save, numpy.load]
 
+not_imported = []
 try:
     import pandas
     # noinspection PyUnresolvedReferences
     pd_properties = [pandas.core.generic.NDFrame, pandas.to_msgpack, pandas.read_msgpack]
 except ImportError:
+    pandas = None
     pd_properties = []
     not_imported.append('msg')
 
@@ -28,13 +25,16 @@ class File(MutableMapping):
         if mode in {'r+', 'wr', 'rw'}:
             mode = 'w+'
         is_folder = path.isdir(file_name)
-        if mode in {'r', 'w+'}:
+        if mode in {'r'}:
             if not is_folder:
                 raise IOError('file not exist!', file_name)
         elif mode == 'w':
             if is_folder:
                 empty_dir(file_name)
             else:
+                os.makedirs(file_name)
+        elif mode == 'w+':
+            if not is_folder:
                 os.makedirs(file_name)
         elif mode == 'w-':
             if is_folder:

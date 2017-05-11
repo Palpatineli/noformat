@@ -12,5 +12,7 @@ setup(
     description='save and load a structured collection of data as folder',
     extras_require={'pd': ['pandas']},
     install_requires=['numpy'],
-    classifiers=['data storage', 'file format']
+    classifiers=["Programming Language :: Python :: 3.5",
+                 "Programming Language :: Python :: 3.6",
+                 "License :: OSI Approved :: GNU General Public License v3 (GPLv3)"]
 )

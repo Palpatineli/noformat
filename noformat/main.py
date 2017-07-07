@@ -1,11 +1,12 @@
-import glob
 import json
-import os
 from collections.abc import MutableMapping
-from os import path
+from os import walk, listdir, remove, rmdir, makedirs
+from os.path import splitext, isdir, join, isfile
 
 import numpy
+
 npy_properties = [numpy.ndarray, numpy.save, numpy.load]
+npz_properties = [dict, lambda x, y: numpy.savez_compressed(x, **y), numpy.load]
 
 not_imported = []
 try:
@@ -19,81 +20,76 @@ except ImportError:
 
 
 class File(MutableMapping):
-    formats = {'npy': npy_properties, 'msg': pd_properties}
+    formats = {'.npy': npy_properties, '.msg': pd_properties, '.npz': npz_properties}
 
     def __init__(self, file_name: str, mode: str = 'r'):
-        if mode in {'r+', 'wr', 'rw'}:
-            mode = 'w+'
-        is_folder = path.isdir(file_name)
-        if mode in {'r'}:
-            if not is_folder:
-                raise IOError('file not exist!', file_name)
-        elif mode == 'w':
-            if is_folder:
-                empty_dir(file_name)
-            else:
-                os.makedirs(file_name)
-        elif mode == 'w+':
-            if not is_folder:
-                os.makedirs(file_name)
-        elif mode == 'w-':
-            if is_folder:
-                raise IOError('file already exist!', file_name)
-            else:
-                os.makedirs(file_name)
-        else:
-            raise ValueError('mode not supported!', mode)
+        self._create_folder(file_name, mode)
         self.file_name = file_name
         self.mode = mode
         self.type_dict = {self.formats[ext][0]: ext for ext in self.formats}
         self.attrs = Attributes(file_name)
         for file_type in not_imported:
             del self.formats[file_type]
+        self._item_list = dict()
+        for file in listdir(file_name):
+            file_base, ext = splitext(file)
+            if ext in self.formats:
+                if file_base in self._item_list:
+                    raise IOError('different items in file!', join(file_name, file_base))
+                self._item_list[file_base] = (ext, file)
 
-    def __contains__(self, item):
-        full_name = path.join(self.file_name, item) + '.*'
-        return bool(glob.glob(full_name))
+    @staticmethod
+    def _create_folder(file_name: str, mode: str):  # file system side effect
+        is_folder = isdir(file_name)
+        if mode not in {'r', 'w', 'r+', 'wr', 'rw', 'w+', 'w-'}:
+            raise ValueError('mode not supported!', mode)
+        if mode == 'r' and not is_folder:
+            raise IOError('file not exist!', file_name)
+        elif mode == 'w-' and is_folder:
+            raise IOError('file already exist!', file_name)
+        elif mode == 'w' and is_folder:
+            empty_dir(file_name)
+        elif not is_folder:
+            makedirs(file_name)
 
-    def __getitem__(self, item):
-        full_name = path.join(self.file_name, item) + '.*'
-        file_list = glob.glob(full_name)
-        if len(file_list) < 1:
-            raise IOError('item does not exist!', path.join(self.file_name, item))
-        if len(file_list) > 1:
-            raise IOError('different items in file!', path.join(self.file_name, item))
-        ext = path.splitext(file_list[0])[1][1:]
-        return self.formats[ext][2](file_list[0])
+    def _remove(self, file_name: str):
+        remove(join(self.file_name, self._item_list[file_name][1]))
+        del self._item_list[file_name]
 
-    def __setitem__(self, key, value):
+    def __contains__(self, item: str):
+        return item in self._item_list
+
+    def __getitem__(self, item: str):
+        if item not in self._item_list:
+            raise IOError('item does not exist!', join(self.file_name, item))
+        ext, file_name = self._item_list[item]
+        return self.formats[ext][2](join(self.file_name, file_name))
+
+    def __setitem__(self, key: str, value):
         if self.mode == 'r':
             raise IOError('cannot write under read mode')
-        if self.__contains__(key):
-            self.__delitem__(key)
+        if key in self._item_list:
+            self._remove(key)
         for file_type, ext in self.type_dict.items():
             if isinstance(value, file_type):
-                full_name = path.join(self.file_name, key) + '.' + ext
+                full_name = join(self.file_name, key) + ext
                 self.formats[ext][1](full_name, value)
+                self._item_list[key] = (ext, key + ext)
                 break
 
     def __iter__(self):
-        file_list = os.listdir(self.file_name)
-        for file in file_list:
-            base_name, ext = path.splitext(file)
-            if ext[1:] in self.formats:
-                yield path.split(base_name)[1]
+        for ext, file in self._item_list:
+            if ext in self.formats:
+                yield file
 
     def __delitem__(self, key):
-        if not self.__contains__(key):
+        if key not in self._item_list:
             raise IOError('value not in file', key)
         else:
-            full_name = path.join(self.file_name, key) + '.*'
-            file_list = glob.glob(full_name)
-            for file in file_list:
-                os.remove(file)
+            self._remove(key)
 
     def __len__(self):
-        file_list = os.listdir(self.file_name)
-        return len([file for file in file_list if path.splitext(file)[1] in self.formats])
+        return len(self._item_list)
 
     def __enter__(self):
         return self
@@ -105,12 +101,12 @@ class File(MutableMapping):
 
 class Attributes(MutableMapping):
     def __init__(self, file_name):
-        self.file_name = path.join(file_name, 'attributes.json')
-        if path.isfile(self.file_name):
+        self.changed = False
+        self.file_name = join(file_name, 'attributes.json')
+        if isfile(self.file_name):
             self.dict = json.load(open(self.file_name, 'r'))
         else:
             self.dict = dict()
-        self.changed = False
 
     def __iter__(self):
         return self.dict.__iter__()
@@ -120,7 +116,10 @@ class Attributes(MutableMapping):
 
     def __setitem__(self, key, value):
         self.changed = True
-        self.dict[key] = value
+        if isinstance(value, npy_properties[0]):
+            self.dict[key] = value.tolist()
+        else:
+            self.dict[key] = value
 
     def __delitem__(self, key):
         self.changed = True
@@ -141,10 +140,10 @@ def empty_dir(top: str) -> None:
     """recursively delete all files inside folder 'top'"""
     if top == '/' or top == "\\":
         return
-    for root, dirs, files in os.walk(top, topdown=False):
+    for root, dirs, files in walk(top, topdown=False):
         for name in files:
-            os.remove(os.path.join(root, name))
+            remove(join(root, name))
         for name in dirs:
-            folder_path = os.path.join(root, name)
+            folder_path = join(root, name)
             empty_dir(folder_path)
-            os.rmdir(folder_path)
+            rmdir(folder_path)

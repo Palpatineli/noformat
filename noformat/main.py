@@ -1,4 +1,5 @@
 import json
+from json.decoder import JSONDecodeError
 from collections.abc import MutableMapping
 from os import walk, listdir, remove, rmdir, makedirs
 from os.path import splitext, isdir, join, isfile
@@ -86,7 +87,11 @@ class Attributes(MutableMapping):
         self.changed = False
         self.file_name = join(file_name, 'attributes.json')
         if isfile(self.file_name):
-            self.dict = json.load(open(self.file_name, 'r'))
+            try:
+                self.dict = json.load(open(self.file_name, 'r'))
+            except JSONDecodeError as e:
+                print("failed to load attributes of ", self.file_name)
+                raise e
         else:
             self.dict = dict()
 

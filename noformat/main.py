@@ -1,8 +1,8 @@
 import json
-from json.decoder import JSONDecodeError
 from collections.abc import MutableMapping
+from json.decoder import JSONDecodeError
 from os import walk, listdir, remove, rmdir, makedirs
-from os.path import splitext, isdir, join, isfile
+from os.path import splitext, isdir, join, isfile, exists, abspath
 
 from .formats import formats
 
@@ -85,8 +85,8 @@ class File(MutableMapping):
 class Attributes(MutableMapping):
     def __init__(self, file_name):
         self.changed = False
-        self.file_name = join(file_name, 'attributes.json')
-        if isfile(self.file_name):
+        self.file_name = abspath(join(file_name, 'attributes.json'))
+        if isfile(self.file_name) and exists(self.file_name):
             try:
                 self.dict = json.load(open(self.file_name, 'r'))
             except JSONDecodeError as e:

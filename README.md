@@ -28,3 +28,7 @@ data/temp/
 |   second_array.msg
 └───attributes.json
 ```
+Logging files for the data can be included:
+1. in json format with .log extension
+2. in cell array format with .mat extension
+It can only be written in the first type

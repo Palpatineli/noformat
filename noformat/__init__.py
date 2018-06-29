@@ -1,1 +1,1 @@
-from .main import File
+from .main import File, isFile

@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='noformat',
-    version='0.1.1',
+    version='0.1.2',
     packages=['noformat'],
     url='https://github.com/Palpatineli/noformat',
     download_url='https://github.com/Palpatineli/noformat/archive/0.1.1.tar.gz',

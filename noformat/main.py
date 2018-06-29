@@ -1,5 +1,7 @@
-import json
+"""main file for noformat, defines file and attribute classes that treat a folder as a hdf5-like file """
+from typing import Dict, Tuple, Hashable
 from collections.abc import MutableMapping
+import json
 from json.decoder import JSONDecodeError
 from os import walk, listdir, remove, rmdir, makedirs
 from os.path import splitext, isdir, join, isfile, exists, abspath
@@ -10,12 +12,13 @@ __all__ = ['File']
 
 
 class File(MutableMapping):
-    def __init__(self, file_name: str, mode: str = 'r'):
+    """defines the main file class, uses a dict of accessors for real files in folder """
+    def __init__(self, file_name: str, mode: str = 'r') -> None:
         self._create_folder(file_name, mode)
         self.file_name = file_name
         self.mode = mode
         self.attrs = Attributes(file_name)
-        self._item_list = dict()
+        self._item_list: Dict[str, Tuple[str, str]] = dict()
         for file in listdir(file_name):
             file_base, ext = splitext(file)
             if ext in formats:
@@ -25,11 +28,14 @@ class File(MutableMapping):
 
     @staticmethod
     def _create_folder(file_name: str, mode: str):  # file system side effect
-        is_folder = isdir(file_name)
+        is_folder = isdir(file_name) and exists(file_name)
         if mode not in {'r', 'w', 'r+', 'wr', 'rw', 'w+', 'w-'}:
             raise ValueError('mode not supported!', mode)
-        if mode == 'r' and not is_folder:
-            raise IOError('file not exist!', file_name)
+        if mode in {'r', 'r+', 'rw'}:
+            if not is_folder:
+                raise IOError('file not exist!', file_name)
+            if not exists(join(file_name, 'attributes.json')):
+                raise IOError('file not in noformat format!', file_name)
         elif mode == 'w-' and is_folder:
             raise IOError('file already exist!', file_name)
         elif mode == 'w' and is_folder:
@@ -41,13 +47,15 @@ class File(MutableMapping):
         remove(join(self.file_name, self._item_list[file_name][1]))
         del self._item_list[file_name]
 
-    def __contains__(self, item: str):
+    def __contains__(self, item: Hashable) -> bool:
+        if not isinstance(item, str):
+            raise ValueError("noformat File components can only have str names")
         return item in self._item_list
 
     def __getitem__(self, item: str):
         if item not in self._item_list:
             raise IOError('item does not exist!', join(self.file_name, item))
-        ext, file_name = self._item_list[item]
+        ext, _ = self._item_list[item]
         return formats[ext].load(join(self.file_name, item))
 
     def __setitem__(self, key: str, value):
@@ -83,6 +91,7 @@ class File(MutableMapping):
 
 
 class Attributes(MutableMapping):
+    """manipulates attributes, save when changed"""
     def __init__(self, file_name):
         self.changed = False
         self.file_name = abspath(join(file_name, 'attributes.json'))
@@ -117,7 +126,7 @@ class Attributes(MutableMapping):
 
     def __del__(self):
         if self.changed:
-            json.dump(self.dict, open(self.file_name, 'w'))
+            json.dump(self.dict, open(self.file_name, 'w'), indent=4)
 
 
 def empty_dir(top: str) -> None:
@@ -131,3 +140,13 @@ def empty_dir(top: str) -> None:
             folder_path = join(root, name)
             empty_dir(folder_path)
             rmdir(folder_path)
+
+
+def isFile(folder: str) -> bool:
+    """Check if a folder makes a valid noformat file."""
+    attribute_file = join(folder, "attributes.json")
+    try:
+        json.load(open(attribute_file))
+        return True
+    except (IOError, ValueError):
+        return False

@@ -62,7 +62,7 @@ try:
     mat_file = FileFormat(mat_ext,
                           lambda x: False,  # never save as such
                           None,
-                          lambda name: cell2array(loadmat(name + log_ext)))
+                          lambda name: cell2array(loadmat(name + mat_ext)))
 except ImportError:
     loadmat = None
     mat_file = None

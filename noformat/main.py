@@ -89,6 +89,9 @@ class File(MutableMapping):
         del exc_type, exc_val, exc_tb
         del self.attrs
 
+    def __str__(self) -> str:
+        return self.file_name
+
 
 class Attributes(MutableMapping):
     """manipulates attributes, save when changed"""

@@ -10,7 +10,6 @@ from .formats import formats
 
 __all__ = ['File']
 
-
 class File(MutableMapping):
     """defines the main file class, uses a dict of accessors for real files in folder """
     def __init__(self, file_name: str, mode: str = 'r') -> None:
@@ -54,6 +53,7 @@ class File(MutableMapping):
 
     def __getitem__(self, item: str):
         if item not in self._item_list:
+            print(item, self.attrs)
             raise IOError('item does not exist!', join(self.file_name, item))
         ext, _ = self._item_list[item]
         return formats[ext].load(join(self.file_name, item))
@@ -92,11 +92,13 @@ class File(MutableMapping):
     def __str__(self) -> str:
         return self.file_name
 
+    def __del__(self):
+        if hasattr(self, "attrs"):
+            del self.attrs
 
 class Attributes(MutableMapping):
     """manipulates attributes, save when changed"""
     def __init__(self, file_name):
-        self.changed = False
         self.file_name = abspath(join(file_name, 'attributes.json'))
         if isfile(self.file_name) and exists(self.file_name):
             try:
@@ -114,12 +116,16 @@ class Attributes(MutableMapping):
         return self.dict.__len__()
 
     def __setitem__(self, key, value):
-        self.changed = True
         self.dict[key] = value
+        self.flush()
 
     def __delitem__(self, key):
-        self.changed = True
         del self.dict[key]
+        self.flush()
+
+    def update(self, other):
+        self.dict.update(other)
+        self.flush()
 
     def __contains__(self, key):
         return key in self.dict
@@ -127,10 +133,8 @@ class Attributes(MutableMapping):
     def __getitem__(self, key):
         return self.dict[key]
 
-    def __del__(self):
-        if self.changed:
-            json.dump(self.dict, open(self.file_name, 'w'), indent=4)
-
+    def flush(self):
+        json.dump(self.dict, open(self.file_name, 'w'), indent=4)
 
 def empty_dir(top: str) -> None:
     """recursively delete all files inside folder 'top'"""
@@ -143,7 +147,6 @@ def empty_dir(top: str) -> None:
             folder_path = join(root, name)
             empty_dir(folder_path)
             rmdir(folder_path)
-
 
 def isFile(folder: str) -> bool:
     """Check if a folder makes a valid noformat file."""
